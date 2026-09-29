@@ -1,6 +1,6 @@
 import type { ConversationService } from "@server/conversation/service";
 import { Hono } from "hono";
-import type { StreamEvent } from "@shared/types.ts";
+import { parseAfter, sseResponse } from "../sse.ts";
 
 
 export function createConversationRoutes(
@@ -28,51 +28,11 @@ export function createConversationRoutes(
     return ctx.json({ accepts: true }, 202);
   });
 
-  conversationApp.post("/:conversationId/stream", (ctx) => {
+  conversationApp.get("/:conversationId/stream", (ctx) => {
     const { conversationId } = ctx.req.param();
-    const afterQuery = ctx.req.query("after") ?? "0";
-    const after =
-      afterQuery === "latest"
-        ? conversationService.getEventChannel(conversationId).lastId()
-        : Number(afterQuery);
-    let unsubscribe: () => void;
-    let heartBeat: ReturnType<typeof setInterval> | undefined;
-    const safteAfter = Number.isSafeInteger(after) && after >= 0 ? after : 0;
     const channel = conversationService.getEventChannel(conversationId);
-    const encoder = new TextEncoder();
-
-    const body = new ReadableStream<Uint8Array>({
-      start: (controller) => {
-        const send = (event: StreamEvent) => {
-          controller.enqueue(
-            encoder.encode(`data:${JSON.stringify(event)}\n\n`),
-          );
-        };
-        const { events } = channel.replay(safteAfter);
-        for (const event of events) {
-          send(event);
-        }
-        unsubscribe = channel.subscirbe(send);
-        heartBeat = setInterval(() => {
-          controller.enqueue(encoder.encode(":keepalive\n\n"));
-        }, 15000);
-      },
-
-      cancel: () => {
-        unsubscribe?.();
-        if (heartBeat) {
-          clearInterval(heartBeat);
-        }
-      },
-    });
-    return new Response(body, {
-      headers: {
-        "Cache-Control": "no-cache,no-transform",
-        "Content-Type": "text/event-stream",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    });
+    const after = parseAfter(ctx.req.query("after"), channel);
+    return sseResponse(channel, after);
   });
 
   return conversationApp;

@@ -11,12 +11,12 @@ export class ConversationReposity {
   }
 
   recordPath(conversationId: string) {
-    return join(this.globalConfig.recordsDir, conversationId);
+    return join(this.globalConfig.recordsDir, conversationId + '.json');
   }
 
   async save(convsersationRecord: ConversationRecord) {
     const conversationRecordPath = this.recordPath(convsersationRecord.id);
-    await mkdir(conversationRecordPath, { recursive: true });
+    await mkdir(this.globalConfig.recordsDir, { recursive: true });
     await writeFile(
       conversationRecordPath,
       JSON.stringify(convsersationRecord),

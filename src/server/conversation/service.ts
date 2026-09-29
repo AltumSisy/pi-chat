@@ -10,7 +10,7 @@ import type { TextContent, ImageContent } from "@earendil-works/pi-ai";
 import type { ConversationSnapshot, RuntimeStatus } from "@shared/types.ts";
 import { isImagePart, resultText } from "./helpr.ts";
 import { existsSync } from "node:fs";
-import { title } from "node:process";
+import { mkdir } from "node:fs/promises";
 
 export class ConversationService {
   private globalConfig: GlobalConfig;
@@ -35,6 +35,8 @@ export class ConversationService {
       this.globalConfig.workspacesDir,
       conversationId,
     );
+
+    await mkdir(conversationWorksapceDir, { recursive: true });
 
     const sessionManager = SessionManager.create(
       conversationWorksapceDir,

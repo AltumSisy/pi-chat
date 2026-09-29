@@ -1,0 +1,38 @@
+
+curl -X POST http://localhost:4328/api/conversation
+
+```json
+{
+  "conversationSummary": {
+    "id": "6fd181c5-8982-4702-a8d1-764bc1b86878",
+    "title": "New Conversation",
+    "createAt": "Wed Sep 30 2026",
+    "updateAt": "Wed Sep 30 2026",
+    "workspaceDir": "D:\\code\\pi-chat-work\\workspaces\\6fd181c5-8982-4702-a8d1-764bc1b86878",
+    "status": "ready"
+  },
+  "messageList": [],
+  "model": {
+    "provider": "dashscope",
+    "id": "deepseek-v4-pro"
+  },
+  "thinkingLevel": "high",
+  "availableThinkingLevels": [
+    "off",
+    "low",
+    "high",
+    "max"
+  ],
+  "status": "ready",
+  "stream": {
+    "id": "6bfae1e3-bbe9-4f18-9af3-67dc2a756ca9",
+    "seqId": 0
+  },
+  "diagnostics": []
+}
+```
+
+
+curl.exe -N -X POST http://localhost:4328/api/conversation/6fd181c5-8982-4702-a8d1-764bc1b86878/message -H 'Content-Typ: application/x-www-form-urlencoded' \ --data-urlencode 'text=hi'
+
+curl.exe -N -X  GET "http://localhost:4328/api/conversation/6fd181c5-8982-4702-a8d1-764bc1b86878/stream"
