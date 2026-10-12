@@ -189,7 +189,7 @@ export class ConversationService {
           if (event.assistantMessageEvent.type === "thinking_delta") {
             managerSession.channel.publish("thinking_delta", {
               id: managerSession.streamThinkingId,
-              text: event.assistantMessageEvent.delta,
+              delta: event.assistantMessageEvent.delta,
             });
           }
           if (event.assistantMessageEvent.type === "thinking_end") {
@@ -197,12 +197,12 @@ export class ConversationService {
               id: managerSession.streamThinkingId,
               text: event.assistantMessageEvent.content,
               completed: true,
-            });
+         /*  */   });
           }
           if (event.assistantMessageEvent.type === "text_delta") {
             managerSession.channel.publish("message_delta", {
               id: managerSession.streamMessageId,
-              text: event.assistantMessageEvent.delta,
+              delta: event.assistantMessageEvent.delta,
             });
           }
           break;
