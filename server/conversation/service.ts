@@ -8,7 +8,7 @@ import { createRuntime } from "./runtime.ts";
 import { EventChannel } from "@server/conversation/channel.ts";
 import type { TextContent, ImageContent } from "@earendil-works/pi-ai";
 import type { ConversationSnapshot, RuntimeStatus } from "@shared/types.ts";
-import { isImagePart, resultText } from "./helpr.ts";
+import { ConversationViewBuild, isImagePart, resultText } from "./helpr.ts";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 
@@ -99,14 +99,16 @@ export class ConversationService {
     const managedSession = await this.ensureManagedSession(id);
     const session = managedSession.runtime.session;
     const channel = managedSession.channel;
-    const branch = session.sessionManager.getBranch();
     
+    const branch = session.sessionManager.getBranch();
+    const builder = new ConversationViewBuild(branch);
+    const messageList = builder.build();
     return {
       conversationSummary: this.summary(
         restoredConversationRecord,
         managedSession.status,
       ),
-      messageList: [],
+      messageList: messageList,
       model: {
         provider: session.agent.state.model.provider,
         id: session.agent.state.model.id,
@@ -199,7 +201,8 @@ export class ConversationService {
               id: managerSession.streamThinkingId,
               text: event.assistantMessageEvent.content,
               completed: true,
-         /*  */   });
+              /*  */
+            });
           }
           if (event.assistantMessageEvent.type === "text_delta") {
             managerSession.channel.publish("message_delta", {

@@ -35,7 +35,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   images: ChatImage[];
-  status: "pending" | "streaming" | "error";
+  status?: "pending" | "streaming" | "error";
 }
 
 export interface ToolRun {

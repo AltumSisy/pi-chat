@@ -29,6 +29,9 @@ export function sendMessage(id: string, text: string): Promise<unknown> {
     }),
   );
 }
+export function getConversation(id:string):Promise<ConversationSnapshot>{
+  return readResponse(fetch("/api/conversation/"+encodeURIComponent(id)));
+}
 
 export function connectEvents(
   id: string,
