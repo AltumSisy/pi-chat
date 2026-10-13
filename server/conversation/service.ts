@@ -99,6 +99,8 @@ export class ConversationService {
     const managedSession = await this.ensureManagedSession(id);
     const session = managedSession.runtime.session;
     const channel = managedSession.channel;
+    const branch = session.sessionManager.getBranch();
+    
     return {
       conversationSummary: this.summary(
         restoredConversationRecord,
