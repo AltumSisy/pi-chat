@@ -146,6 +146,7 @@ export class ConversationViewBuild {
     const thinkingBlockMessage: ThinkingBlock = {
       id: entry.id + ":thinking",
       text: extractThinking(content),
+      completed: true
     };
     this.messageItem.push({
       id: entry.id + ":thinking",

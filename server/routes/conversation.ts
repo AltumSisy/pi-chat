@@ -16,7 +16,7 @@ export function createConversationRoutes(
 
   conversationApp.post("/:id", async (ctx) => {
     const { id } = ctx.req.param();
-    const conversationSnapshot = conversationService.snapshot(id);
+    const conversationSnapshot = await conversationService.snapshot(id);
     return ctx.json(conversationSnapshot);
   });
 

@@ -5,8 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web -c green,cyan \"pnpm server:dev\" \"pnpm web:dev\"",
+    "dev:debug": "concurrently -k -n api,web -c green,cyan \"pnpm server:debug\" \"pnpm web:dev\"",
     "web:dev": "vite",
     "server:dev": "tsx --watch --tsconfig tsconfig.node.json --env-file-if-exists=.env server/index.ts",
+    "server:dev:native": "node --watch --env-file-if-exists=.env server/index.ts",
+    "server:debug": "node --inspect=9229 --env-file-if-exists=.env server/index.ts",
+    "server:debug:watch": "node --watch --inspect=9229 --env-file-if-exists=.env server/index.ts",
+    "server:debug:keepalive": "node scripts/serve-keepalive.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"

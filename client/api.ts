@@ -1,6 +1,5 @@
 import type {
   ConversationSnapshot,
-  CreateConversationResponse,
   StreamEvent,
 } from "../shared/types";
 
@@ -29,8 +28,11 @@ export function sendMessage(id: string, text: string): Promise<unknown> {
     }),
   );
 }
-export function getConversation(id:string):Promise<ConversationSnapshot>{
-  return readResponse(fetch("/api/conversation/"+encodeURIComponent(id)));
+// 历史快照：服务端会顺带恢复 runtime session，所以用 POST（见 server/routes/conversation.ts）
+export function getConversation(id: string): Promise<ConversationSnapshot> {
+  return readResponse(
+    fetch(`/api/conversation/${encodeURIComponent(id)}`, { method: "POST" }),
+  );
 }
 
 export function connectEvents(

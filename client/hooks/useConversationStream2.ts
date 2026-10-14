@@ -26,13 +26,16 @@ export function useConversationStream2(conversationId?: string) {
     message: string;
   }>({ message: "" });
   const pendingSend = useRef<PendingSend | null>(null);
-  const [historyMessageList, setHistoryMessageList] = useState<
-    MessageListItem[]
-  >([]);
+  const [historyState, setHistoryState] = useState<{
+    conversationId?: string;
+    items: MessageListItem[];
+  }>({ items: [] });
   const esRef = useRef<EventSource | null>(null);
 
   const messageItems = [
-    ...historyMessageList,
+    ...(historyState.conversationId === conversationId
+      ? historyState.items
+      : []),
     ...(messageState.conversationId === conversationId
       ? messageState.items
       : []),
@@ -42,11 +45,35 @@ export function useConversationStream2(conversationId?: string) {
 
     // 先关掉旧的，防止 StrictMode 双调用导致两个连接并存
     esRef.current?.close();
-    async () => {
-      const conversation = await getConversation(conversationId);
-      setHistoryMessageList(conversation.messageList);
+    esRef.current = null;
 
-      const es = connectEvents(
+    let cancelled = false;
+    let source: EventSource | null = null;
+
+    (async () => {
+      // ── 1. 历史会话：取出快照（历史消息 + 事件游标 seqId） ──
+      let after = 0;
+      try {
+        const conversation = await getConversation(conversationId);
+        if (cancelled) return;
+        setHistoryState({
+          conversationId,
+          items: conversation.messageList,
+        });
+        // 只订阅快照之后的事件：历史里已有的内容不再重放，避免重复气泡
+        after = conversation.stream?.seqId ?? 0;
+      } catch (error) {
+        if (cancelled) return;
+        setErrorState({
+          conversationId,
+          message: (error as Error)?.message || "Failed to load history",
+        });
+      }
+
+      if (cancelled) return;
+
+      // ── 2. 连接 SSE：历史拉取失败也要连，否则收不到后续事件 ──
+      source = connectEvents(
         conversationId,
         (event) => {
           setMessageState((current) => {
@@ -84,12 +111,16 @@ export function useConversationStream2(conversationId?: string) {
 
           send(conversationId, pending.text);
         },
+        after,
       );
 
-      esRef.current = es;
-      return () => {
-        es.close();
-      };
+      esRef.current = source;
+    })();
+
+    return () => {
+      cancelled = true;
+      source?.close();
+      if (esRef.current === source) esRef.current = null;
     };
   }, [conversationId]);
 

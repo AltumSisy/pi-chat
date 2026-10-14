@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ConversationReposity } from "./repository.ts";
 import { createRuntime } from "./runtime.ts";
-import { EventChannel } from "@server/conversation/channel.ts";
+import { EventChannel } from "./channel.ts";
 import type { TextContent, ImageContent } from "@earendil-works/pi-ai";
 import type { ConversationSnapshot, RuntimeStatus } from "@shared/types.ts";
 import { ConversationViewBuild, isImagePart, resultText } from "./helpr.ts";

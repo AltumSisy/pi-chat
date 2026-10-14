@@ -36,3 +36,10 @@ curl -X POST http://localhost:4328/api/conversation
 curl.exe -N -X POST http://localhost:4328/api/conversation/6fd181c5-8982-4702-a8d1-764bc1b86878/message -H 'Content-Typ: application/x-www-form-urlencoded' \ --data-urlencode 'text=hi'
 //消费
 curl.exe -N -X  GET "http://localhost:4328/api/conversation/6fd181c5-8982-4702-a8d1-764bc1b86878/stream"
+
+//获取历史消息：
+ curl.exe -X POST http://127.0.0.1:4328/api/conversation/6fd181c5-8982-4702-a8d1-764bc1b86878
+
+ 
+后端debug: pnpm server:debug
+前端：pnpm web:dev
