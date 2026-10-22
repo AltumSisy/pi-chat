@@ -1,7 +1,8 @@
 import type { GlobalConfig } from "@server/config";
 import type { ConversationRecord } from "./types.ts";
 import { join } from "node:path";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile, readdir } from "node:fs/promises";
+
 
 export class ConversationReposity {
   private readonly globalConfig: GlobalConfig;
@@ -11,7 +12,7 @@ export class ConversationReposity {
   }
 
   recordPath(conversationId: string) {
-    return join(this.globalConfig.recordsDir, conversationId + '.json');
+    return join(this.globalConfig.recordsDir, conversationId + ".json");
   }
 
   async save(convsersationRecord: ConversationRecord) {
@@ -46,10 +47,30 @@ export class ConversationReposity {
     };
 
     await this.save(mergeConversationRecord);
+    return mergeConversationRecord;
   }
 
   async delete(conversationId: string) {
     const conversationRecordPath = this.recordPath(conversationId);
     rm(conversationRecordPath, { force: true });
+  }
+
+  async list(): Promise<ConversationRecord[]> {
+    const originFiles = await readdir(this.globalConfig.recordsDir);
+    const files = originFiles.filter((file) => file.endsWith(".json"));
+    const conversationRecords = await Promise.all(
+      files.map(async (file) => {
+        try {
+          const rawData = await readFile(
+            join(this.globalConfig.recordsDir, file),
+            "utf-8",
+          );
+          return JSON.parse(rawData) as ConversationRecord;
+        } catch {
+          return undefined;
+        }
+      }),
+    );
+    return conversationRecords.filter(record => record != undefined);
   }
 }

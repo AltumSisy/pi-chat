@@ -7,10 +7,14 @@ import type { ConversationReposity } from "./repository.ts";
 import { createRuntime } from "./runtime.ts";
 import { EventChannel } from "./channel.ts";
 import type { TextContent, ImageContent } from "@earendil-works/pi-ai";
-import type { ConversationSnapshot, RuntimeStatus } from "@shared/types.ts";
+import type {
+  ConversationSnapshot,
+  ConversationSummary,
+  RuntimeStatus,
+} from "@shared/types.ts";
 import { ConversationViewBuild, isImagePart, resultText } from "./helpr.ts";
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 
 export class ConversationService {
   private globalConfig: GlobalConfig;
@@ -89,6 +93,7 @@ export class ConversationService {
     };
     this.sessionManager.set(managerSession.id, managerSession);
     this.bind(managerSession);
+
     return managerSession;
   }
 
@@ -99,7 +104,7 @@ export class ConversationService {
     const managedSession = await this.ensureManagedSession(id);
     const session = managedSession.runtime.session;
     const channel = managedSession.channel;
-    
+
     const branch = session.sessionManager.getBranch();
     const builder = new ConversationViewBuild(branch);
     const messageList = builder.build();
@@ -122,6 +127,90 @@ export class ConversationService {
     };
   }
 
+  /**
+   *
+   * 获取会话列表
+   * @returns
+   */
+  async list(): Promise<ConversationSummary[]> {
+    const conversationRecords = await this.conversationReposity.list();
+    return conversationRecords
+      .map((record) =>
+        this.summary(
+          record,
+          this.sessionManager.get(record.id)?.status ?? "cold",
+        ),
+      )
+      .sort((a, b) => b.updateAt.localeCompare(a.updateAt));
+  }
+
+  /**
+   *
+   * 删除会话
+   * @param conversationId
+   * @returns
+   */
+  async delete(conversationId: string) {
+    const conversationRecord =
+      await this.conversationReposity.get(conversationId);
+    if (!conversationRecord) return;
+
+    const sessionManager = this.sessionManager.get(conversationId);
+    if (sessionManager && this.isBusy(sessionManager)) {
+      throw new Error(
+        `can not delete conversation ${conversationId},it status is busy`,
+      );
+    }
+
+    /**
+     * records -> xx.json
+     * session -> xx.jsonl
+     * workspaces -> xx ->xx.
+     */
+    if (existsSync(conversationRecord.sessionFile)) {
+      await rm(conversationRecord.sessionFile, { force: true });
+    }
+    await rm(conversationRecord.workspaceDir, { force: true, recursive: true });
+
+    await this.conversationReposity.delete(conversationId);
+    this.release(conversationId);
+    this.sessionManager.delete(conversationId);
+    this.channels.delete(conversationId);
+  }
+
+  /**
+   *
+   * 重命名
+   * @param conversationId
+   * @param title
+   * @returns
+   */
+  public async rename(
+    conversationId: string,
+    title: string,
+  ): Promise<ConversationSummary> {
+    const cleanedTitle = title.trim();
+    if (!cleanedTitle) throw Error(`title cannot be empty`);
+    const newConversatioRecord = await this.conversationReposity.update(
+      conversationId,
+      {
+        title: cleanedTitle,
+      },
+    );
+    return this.summary(
+      newConversatioRecord,
+      this.sessionManager.get(conversationId)?.status ?? "cold",
+    );
+  }
+
+  public async abort(conversationId: string) {
+    const managedSession = await this.ensureManagedSession(conversationId);
+    if (!this.isBusy(managedSession)) return;
+    this.setStatus(managedSession, "stopping");
+    managedSession.runtime.session.abort();
+    this.setStatus(managedSession, "ready");
+  }
+  
   private summary(
     conversationRecord: ConversationRecord,
     runtimeStatus: RuntimeStatus,
@@ -316,5 +405,24 @@ export class ConversationService {
     }
 
     return this.createManagerSession(conversationRecord, sessionManaged);
+  }
+
+  private isBusy(managerSession: ManagerSession): boolean {
+    return (
+      managerSession.runtime.session.agent.state.isStreaming ||
+      managerSession.status === "running" ||
+      managerSession.status === "stopping" ||
+      managerSession.status === "compacting"
+    );
+  }
+
+  private async release(conversationId: string) {
+    const managerSession = this.sessionManager.get(conversationId);
+    if (!managerSession) return;
+    managerSession.unsubscribe?.();
+    managerSession.runtime.session.dispose();
+    await this.conversationReposity.delete(conversationId);
+    this.channels.delete(conversationId);
+    this.sessionManager.delete(conversationId);
   }
 }

@@ -1,11 +1,12 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronRight, Plus, Sparkles } from "lucide-react";
-import { createConversation } from "../api";
+import { createConversation, listConversaiton } from "../api";
 import { MessageItem } from "./MessageItem";
 import LoadingState from "./primitives/LoadingState";
 import PromptBar from "./primitives/PromptBar";
 import { useConversationStream2 } from "../hooks/useConversationStream2";
+import type { ConversationSummary } from "../../shared/types";
 
 /** 空状态时展示的建议 prompt */
 const suggestedPrompts = [
@@ -19,12 +20,20 @@ export default function AgentHarness(): ReactNode {
   const navigate = useNavigate();
   const { messageItems, loading, error, send } =
     useConversationStream2(conversationId);
+  const [conversationSummarys, setConversationSummarys] =
+    useState<ConversationSummary[]>();
   const bottomRef = useRef<HTMLDivElement>(null);
   const submittedRef = useRef(false);
 
   const isEmpty = messageItems.length === 0;
 
   // ── 发送消息后 smooth 滚到底 ──
+  useEffect(() => {
+    async () => {
+      const conversationSummarys = await listConversaiton();
+      setConversationSummarys(conversationSummarys);
+    };
+  }, []);
   useEffect(() => {
     if (!submittedRef.current || messageItems.length === 0) return;
     submittedRef.current = false;

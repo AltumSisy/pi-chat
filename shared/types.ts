@@ -1,4 +1,4 @@
-export type RuntimeStatus = "ready" | "running" | "stopping" | "error" | "cold";
+export type RuntimeStatus = "ready" | "running" | "stopping" | "error" | "cold" | "compacting";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 export type { ThinkingLevel };
 
