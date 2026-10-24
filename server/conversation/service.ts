@@ -16,6 +16,26 @@ import { ConversationViewBuild, isImagePart, resultText } from "./helpr.ts";
 import { existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 
+/** 新建会话时的占位标题，一旦有首条用户消息就会被替换 */
+const DEFAULT_CONVERSATION_TITLE = "New Conversation";
+const TITLE_MAX_LENGTH = 24;
+
+/** 从首条用户输入里挤出一个短标题：取第一行非空内容并截断 */
+function titleFromInput(userInput: string): string {
+  const firstLine = userInput.split("\n").find((line) => line.trim()) ?? "";
+  const cleaned = firstLine.replace(/\s+/g, " ").trim();
+  if (!cleaned) return DEFAULT_CONVERSATION_TITLE;
+  return cleaned.length <= TITLE_MAX_LENGTH
+    ? cleaned
+    : `${cleaned.slice(0, TITLE_MAX_LENGTH)}…`;
+}
+
+/** 历史记录是 toDateString()（天粒度），新记录是 ISO，两种都要能比较 */
+function timestampOf(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 export class ConversationService {
   private globalConfig: GlobalConfig;
   private conversationReposity: ConversationReposity;
@@ -48,16 +68,16 @@ export class ConversationService {
       { id: conversationId },
     );
 
-    const currentDate = new Date().toDateString();
+    const currentTimestamp = new Date().toISOString();
 
     const conversationRecord: ConversationRecord = {
       id: conversationId,
-      title: `New Conversation`,
+      title: DEFAULT_CONVERSATION_TITLE,
       workspaceDir: conversationWorksapceDir,
       sessionId: sessionManager.getSessionId(),
       sessionFile: sessionManager.getSessionFile()!,
-      createdAt: currentDate,
-      updatedAt: currentDate,
+      createdAt: currentTimestamp,
+      updatedAt: currentTimestamp,
     };
 
     await this.conversationReposity.save(conversationRecord);
@@ -70,6 +90,8 @@ export class ConversationService {
     if (!cleanedUserInput || cleanedUserInput.length === 0)
       throw new Error("user input is empty");
     const managedSession = await this.ensureManagedSession(conversationId);
+    // 首条消息顺便给会话起名（只改一次，之后就是用户自己的标题）
+    await this.ensureTitle(conversationId, cleanedUserInput);
     managedSession.runtime.session.prompt(cleanedUserInput);
   }
   //glue with pi
@@ -141,7 +163,7 @@ export class ConversationService {
           this.sessionManager.get(record.id)?.status ?? "cold",
         ),
       )
-      .sort((a, b) => b.updateAt.localeCompare(a.updateAt));
+      .sort((a, b) => timestampOf(b.updateAt) - timestampOf(a.updateAt));
   }
 
   /**
@@ -211,6 +233,17 @@ export class ConversationService {
     this.setStatus(managedSession, "ready");
   }
   
+  /** 会话还是默认标题时，用首条用户消息生成标题 */
+  private async ensureTitle(conversationId: string, userInput: string) {
+    const conversationRecord =
+      await this.conversationReposity.get(conversationId);
+    if (!conversationRecord) return;
+    if (conversationRecord.title !== DEFAULT_CONVERSATION_TITLE) return;
+    await this.conversationReposity.update(conversationId, {
+      title: titleFromInput(userInput),
+    });
+  }
+
   private summary(
     conversationRecord: ConversationRecord,
     runtimeStatus: RuntimeStatus,

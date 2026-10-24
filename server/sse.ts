@@ -57,6 +57,13 @@ export function sseResponse(channel: EventChannel, after: number): Response {
         );
       };
 
+      // 0. 立刻写一帧 SSE 注释（浏览器会忽略），保证「第一个 body 字节」马上产生。
+      // 必须放在 replay 之前：http-proxy 类代理（含 Vite dev proxy）收到上游响应后
+      // 只 setHeader + pipe，而 Node 要等第一次 res.write() 才把响应头发出去。
+      // 若这里静默（新会话没有可 replay 的事件），客户端要等到 15s 的 keepalive
+      // 才能拿到响应头，EventSource 的 onopen 就一直不触发。
+      controller.enqueue(encoder.encode(":connected\n\n"));
+
       // 1. Replay historical events (for reconnection)
       const { events } = channel.replay(after);
       for (const event of events) {

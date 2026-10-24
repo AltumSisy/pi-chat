@@ -6,6 +6,7 @@
 ┌─────────────────────────────────────────────────┐
 │                    UI 层                         │
 │  AgentHarness (组装)                             │
+│  ├─ SidebarNav     (会话导航)                    │
 │  ├─ PromptBar      (用户输入)                    │
 │  ├─ MessageItem    (消息分发器)                  │
 │  │   ├─ ThinkingState  (思考面板)                │
@@ -99,7 +100,9 @@ SSE 事件流是"追加式"的——新事件要合并到现有列表，不是�
 |------|------|------|
 | `api.ts` | [01-api.md](./01-api.md) | HTTP + SSE 封装 |
 | `state.ts` | [02-state.md](./02-state.md) | Reducer 状态机 |
-| `hooks/useConversationStream.ts` | [03-hook.md](./03-hook.md) | React Hook 串联 |
+| `hooks/useConversationStream2.ts` | [03-hook.md](./03-hook.md) | React Hook 串联（当前使用） |
+| `hooks/useConversationList.ts` | [07-sidebar-nav.md](./07-sidebar-nav.md) | 会话列表数据源 |
+| `components/primitives/SidebarNav.tsx` + `GlideMenu.tsx` | [07-sidebar-nav.md](./07-sidebar-nav.md) | 侧边栏会话导航 |
 | `components/primitives/*` | [04-primitives.md](./04-primitives.md) | 5 个原始 UI 组件 |
 | `components/Markdown.tsx` + `MessageItem.tsx` | [05-markdown-message.md](./05-markdown-message.md) | 消息渲染 |
 | `components/AgentHarness.tsx` | [06-agent-harness.md](./06-agent-harness.md) | 主组装组件 |

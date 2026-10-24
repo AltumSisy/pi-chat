@@ -82,7 +82,7 @@ export function connectEvents(
  * 会话列表
  * @returns
  */
-export function listConversaiton(): Promise<ConversationSummary[]> {
+export function listConversation(): Promise<ConversationSummary[]> {
   return readResponse(fetch(`/api/conversation`));
 }
 
@@ -93,7 +93,7 @@ export function listConversaiton(): Promise<ConversationSummary[]> {
  */
 export function deleteConversation(id: string): Promise<{ deleted: true }> {
   return readResponse(
-    fetch("/api/conversation" + encodeURIComponent(id), {
+    fetch("/api/conversation/" + encodeURIComponent(id), {
       method: "DELETE",
     }),
   );
@@ -110,7 +110,7 @@ export function renameConversation(
   title: string,
 ): Promise<ConversationSummary> {
   return readResponse(
-    fetch("/api/conversation" + encodeURIComponent(id), {
+    fetch("/api/conversation/" + encodeURIComponent(id), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
@@ -125,7 +125,7 @@ export function renameConversation(
  */
 export function abortConversation(id: string): Promise<{ aborted: true }> {
   return readResponse(
-    fetch("/api/conversation" + encodeURIComponent(id) + "/abort", {
+    fetch("/api/conversation/" + encodeURIComponent(id) + "/abort", {
       method: "POST",
     }),
   );

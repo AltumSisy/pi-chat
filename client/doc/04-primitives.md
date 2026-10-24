@@ -6,7 +6,8 @@
 
 ## 职责
 
-5 个独立的、可复用的 UI 组件。它们不关心业务逻辑，只负责视觉呈现。
+若干独立的、可复用的 UI 件：不关心业务逻辑，只负责视觉呈现。
+（行级交互的 `GlideMenu` / `SidebarNav` 单独见 `07-sidebar-nav.md`）
 
 ## 组件一览
 
@@ -17,6 +18,7 @@
 | `ToolChips` | `ToolChips.tsx` | 工具调用卡片 |
 | `PromptBar` | `PromptBar.tsx` | 消息输入框 |
 | `StreamingText` | `StreamingText.tsx` | 流式文字 + 光标 |
+| `ConfirmPopover` | `ConfirmPopover.tsx` | 就地二次确认弹层（替代 `window.confirm`） |
 
 ---
 
@@ -236,3 +238,57 @@ AgentHarness 脚手架里写的是：
 ```
 
 AI Chat 场景的"流式渲染"本质就是：**文字逐字追加 + 末尾光标**。逐字追加由 SSE `message_delta` 事件驱动，Reducer 往 `text` 后面拼字符串，React 自动重渲染——不需要组件自己实现"逐字动画"。`StreamingText` 组件只是负责**在末尾加一个光标**。
+---
+
+## ConfirmPopover — 就地二次确认
+
+### 视觉结构
+
+```
+   会话列表行 hover → [✎][🗑] ← 点删除
+                              ┌────────────────────────────┐
+                              │ 删除「会话 6fd181c」？      │ ← title
+                              │ 会话记录与工作区文件都会被  │ ← description
+                              │ 删除，无法恢复。            │
+                              │               [取消] [删除] │ ← 焦点在「取消」
+                              └────────────────────────────┘
+```
+
+贴在触发元素旁边（`align="end"` 默认右边贴齐；`side="auto"` 默认落在下方，放不下翻到上方），
+portal 到 `body` + `position: fixed`，所以不会被侧栏的 `overflow: hidden` 裁掉。
+
+### 核心行为
+
+| 行为 | 实现 |
+|------|------|
+| 触发器 | 单个元素，`cloneElement` 注入 `onClick` / `ref` / `aria-haspopup="dialog"` / `aria-expanded` / `data-confirm-open` |
+| 打开 | 先算位置再显示（`visibility` 由 placement 决定），不会先闪在 (0,0) 再跳 |
+| 焦点 | 打开落在「取消」（破坏性动作回车不会误删）；关闭还回触发器 |
+| Tab | 只在两个按钮之间循环 |
+| Esc / 外点 | 关闭；`pending` 期间不响应，避免"关了但删了"的含糊状态 |
+| 确认中 | `onConfirm` 返回 Promise 时按钮 loading（`LoaderCircle` + `animate-spin`），两个按钮都禁用 |
+| 跟随 | `resize` + `scroll`（捕获阶段，侧栏内部滚动容器也能收到）重算位置 |
+
+### 两个踩过的坑
+
+**1. 对 `visibility: hidden` 的元素调 `focus()` 是静默失效的。**
+面板在测出位置之前是 `visibility: hidden`，此时对「取消」`focus()` 不报错也不生效。
+所以焦点不能放在"打开"那一刻，要等 `placement` 算完（面板转为可见）再落，
+并用 `focusMovedRef` 守住"只落一次"，否则 scroll/resize 重算位置会把焦点抢回来。
+
+**2. 挂着 transform 动画的面板，`getBoundingClientRect()` 量到的是缩放后的尺寸。**
+面板挂着 `pop-in`（`scale(0.95) → 1`）。定位时若用 rect 量高度会拿到 0.95 倍的值：
+落在下方时看不出来（只按上边对齐），一旦翻到上方要用高度算上边，就会少算
+那 6px —— 面板贴住触发器甚至重叠。改用 `offsetWidth/offsetHeight`（不受 transform 影响）。
+
+### 宿主样式钩子
+
+面板打开时触发器带 `data-confirm-open="true"`。侧栏用它保证行内按钮不会消失
+（弹层 portal 到 body，鼠标移过去就不再属于行的 hover）：
+
+```css
+.sidebar-row-action:has([data-confirm-open="true"]) {
+  pointer-events: auto;
+  opacity: 1;
+}
+```

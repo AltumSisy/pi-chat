@@ -1,2 +1,2 @@
-export * from './system';
-export * from './conversation';
+export * from './system.ts';
+export * from './conversation.ts';

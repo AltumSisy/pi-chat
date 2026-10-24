@@ -43,7 +43,7 @@ export class ConversationReposity {
     const mergeConversationRecord: ConversationRecord = {
       ...conversationRecord,
       ...updateConversationRecord,
-      updatedAt: new Date().toDateString(),
+      updatedAt: new Date().toISOString(),
     };
 
     await this.save(mergeConversationRecord);

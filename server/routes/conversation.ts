@@ -2,7 +2,6 @@ import type { ConversationService } from "@server/conversation/service";
 import { Hono } from "hono";
 import { parseAfter, sseResponse } from "../sse.ts";
 import { jsonBody } from "@server/utils";
-import { ConversationSummary } from '../../shared/types';
 
 export function createConversationRoutes(
   conversationService: ConversationService,
