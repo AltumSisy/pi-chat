@@ -10,11 +10,14 @@ import { ArrowUp } from "lucide-react";
 export default function PromptBar({
   placeholder = "输入消息，按 Enter 发送…",
   loading = false,
+  actions,
   onSend,
 }: {
   placeholder?: string;
   /** 发送中时禁用输入 */
   loading?: boolean;
+  /** 发送按钮左侧的附加操作（如模型 / 推理强度配置） */
+  actions?: ReactNode;
   onSend?: (text: string) => void;
 }): ReactNode {
   const [text, setText] = useState("");
@@ -67,6 +70,9 @@ export default function PromptBar({
                    min-h-[32px] max-h-[120px]
                    disabled:opacity-50"
       />
+
+      {/* ── 配置入口（模型 / 推理强度） ── */}
+      {actions && <div className="shrink-0">{actions}</div>}
 
       {/* ── 发送按钮 ── */}
       <button

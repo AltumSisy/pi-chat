@@ -2,6 +2,7 @@ import type { ConversationService } from "@server/conversation/service";
 import { Hono } from "hono";
 import { parseAfter, sseResponse } from "../sse.ts";
 import { jsonBody } from "@server/utils";
+import type { ConversationConfigUpdate } from "@shared/types.ts";
 
 export function createConversationRoutes(
   conversationService: ConversationService,
@@ -54,7 +55,10 @@ export function createConversationRoutes(
     const body = await jsonBody<{ title?: unknown }>(ctx.req.raw);
     if (typeof body.title !== "string")
       throw new Error("Title should be a valid string");
-    const conversationSummary = await conversationService.rename(conversationId, body.title);
+    const conversationSummary = await conversationService.rename(
+      conversationId,
+      body.title,
+    );
 
     return ctx.json(conversationSummary);
   });
@@ -89,6 +93,26 @@ export function createConversationRoutes(
     const channel = conversationService.getEventChannel(conversationId);
     const after = parseAfter(ctx.req.query("after"), channel);
     return sseResponse(channel, after);
+  });
+
+  /**
+   * 获取配置
+   */
+  conversationApp.get("/:conversationId/config", async (ctx) => {
+    const { conversationId } = ctx.req.param();
+    const conversationConfig =
+      await conversationService.getConfig(conversationId);
+    return ctx.json(conversationConfig);
+  });
+
+  /**
+   * 变更配置
+   */
+  conversationApp.patch("/:conversationId/config", async (ctx) => {
+    const { conversationId } = ctx.req.param();
+    const body = await jsonBody<ConversationConfigUpdate>(ctx.req.raw);
+    const updatedConfig = await conversationService.updateConfig(conversationId, body)
+    return ctx.json(updatedConfig);
   });
 
   return conversationApp;

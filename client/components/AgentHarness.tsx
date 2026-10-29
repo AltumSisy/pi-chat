@@ -4,8 +4,10 @@ import { ChevronRight, CircleStop, Sparkles, SquarePen } from "lucide-react";
 import { useConversationList } from "../hooks/useConversationList";
 import { isBusyStatus, STATUS_LABEL } from "../lib/status";
 import { useConversationStream2 } from "../hooks/useConversationStream2";
+import { useConversationConfig } from "../hooks/useConversationConfig";
 import { MessageItem } from "./MessageItem";
 import LoadingState from "./primitives/LoadingState";
+import ModelConfigPill from "./primitives/ModelConfigPill";
 import PromptBar from "./primitives/PromptBar";
 import type { ConfirmCopy } from "./primitives/ConfirmPopover";
 import SidebarNav, { type SidebarRecent } from "./primitives/SidebarNav";
@@ -33,6 +35,15 @@ export default function AgentHarness(): ReactNode {
   const navigate = useNavigate();
   const { messageItems, loading, error, send } =
     useConversationStream2(conversationId);
+  const {
+    config,
+    loading: configLoading,
+    saving: configSaving,
+    error: configError,
+    setModel,
+    setThinkingLevel,
+    flush: flushConfig,
+  } = useConversationConfig(conversationId);
   const {
     summaries,
     loading: listLoading,
@@ -74,8 +85,12 @@ export default function AgentHarness(): ReactNode {
 
   function handleSend(text: string) {
     submittedRef.current = true;
-    // POST 返回就代表服务端已经开始跑，刷一次列表让状态点跟上
-    void send(text).then(() => refresh());
+    // 先把模型 / 推理强度的待提交改动落盘，确保本轮请求用上最新配置
+    void (async () => {
+      await flushConfig();
+      await send(text);
+      refresh();
+    })();
   }
 
   /** 不立刻建会话：回空状态，首次发送时才创建，避免列表堆空记录 */
@@ -220,14 +235,14 @@ export default function AgentHarness(): ReactNode {
             </div>
           )}
 
-          {/* ── 错误提示：流错误 + 列表操作失败 ── */}
-          {(error || listError) && (
+          {/* ── 错误提示：流错误 + 列表操作失败 + 配置保存失败 ── */}
+          {(error || listError || configError) && (
             <div className="mx-auto max-w-[960px] px-6 pb-4">
               <div
                 className="w-fit max-w-full rounded-md bg-red-tint px-2.5 py-1.5 text-xs text-red"
                 role="alert"
               >
-                {error || listError}
+                {error || listError || configError}
               </div>
             </div>
           )}
@@ -240,6 +255,23 @@ export default function AgentHarness(): ReactNode {
               onSend={handleSend}
               loading={loading}
               placeholder="输入消息，按 Enter 发送…"
+              actions={
+                config ? (
+                  <ModelConfigPill
+                    config={config}
+                    disabled={loading}
+                    saving={configSaving}
+                    error={configError}
+                    onModelChange={setModel}
+                    onThinkingLevelChange={setThinkingLevel}
+                  />
+                ) : conversationId && configLoading ? (
+                  <span
+                    aria-hidden
+                    className="block h-8 w-[148px] animate-pulse rounded-full bg-inset"
+                  />
+                ) : undefined
+              }
             />
             <div className="mt-1.5 text-[10px] text-ink-3">
               <span>Enter 发送 · Shift + Enter 换行</span>

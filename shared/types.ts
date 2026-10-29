@@ -1,4 +1,10 @@
-export type RuntimeStatus = "ready" | "running" | "stopping" | "error" | "cold" | "compacting";
+export type RuntimeStatus =
+  | "ready"
+  | "running"
+  | "stopping"
+  | "error"
+  | "cold"
+  | "compacting";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 export type { ThinkingLevel };
 
@@ -17,11 +23,11 @@ export type EventType =
   | "tool_updated"
   | "tool_completed";
 
-  export interface StreamEvent<T = unknown> {
-    id: number;
-    streamId: string;
-    type: EventType;
-    payload: T;
+export interface StreamEvent<T = unknown> {
+  id: number;
+  streamId: string;
+  type: EventType;
+  payload: T;
 }
 
 export interface ChatImage {
@@ -81,16 +87,50 @@ export interface ConversationSnapshot {
   model: { provider: string; id: string };
   thinkingLevel: ThinkingLevel;
   availableThinkingLevels: ThinkingLevel[];
-  status:RuntimeStatus;
-  error?:string;
-  stream:{id:string;seqId:number};
-  diagnostics:string[];
+  status: RuntimeStatus;
+  error?: string;
+  stream: { id: string; seqId: number };
+  diagnostics: string[];
 }
 
-export interface CreateConversationResponse{
-  conversation:{id:string};
-  model:{provider:string;id:string};
-  thinkingLevel:ThinkingLevel;
-  stream:{id:string;seqId:number};
-  diagnostics:string[]
+export interface CreateConversationResponse {
+  conversation: { id: string };
+  model: { provider: string; id: string };
+  thinkingLevel: ThinkingLevel;
+  stream: { id: string; seqId: number };
+  diagnostics: string[];
+}
+
+export interface ModelOption {
+  provider: string;
+  id: string;
+  name: string;
+  contextWindow: number;
+  reasoning: boolean;
+  imageInput: boolean;
+}
+
+export interface RepositoryInfo {
+  branch: string;
+  commit: string;
+}
+
+export interface BootstrapData {
+  models: ModelOption[];
+  repository?: RepositoryInfo;
+}
+
+export interface ConversationConfig {
+  model: { provider: string; id: string };
+  models: ModelOption[];
+  thinkingLevel: ThinkingLevel;
+  availableThinkingLevels: ThinkingLevel[];
+}
+
+export interface ConversationConfigUpdate{
+  model?:{
+    provider:string,
+    id:string
+  };
+  thinkingLevel?:ThinkingLevel
 }

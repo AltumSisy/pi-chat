@@ -1,4 +1,6 @@
 import type {
+  ConversationConfig,
+  ConversationConfigUpdate,
   ConversationSnapshot,
   ConversationSummary,
   StreamEvent,
@@ -114,6 +116,36 @@ export function renameConversation(
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
+    }),
+  );
+}
+
+/**
+ * 获取配置
+ * @param id 
+ * @returns 
+ */
+export function getConversationConfig(id: string): Promise<ConversationConfig> {
+  return readResponse(
+    fetch("/api/conversation/" + encodeURIComponent(id) + "/config"),
+  );
+}
+
+/**
+ * 更新配置
+ * @param id
+ * @param update
+ * @returns
+ */
+export function updateConversationConfig(
+  id: string,
+  update: ConversationConfigUpdate,
+): Promise<ConversationConfig> {
+  return readResponse(
+    fetch("/api/conversation/" + encodeURIComponent(id) + "/config", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(update),
     }),
   );
 }

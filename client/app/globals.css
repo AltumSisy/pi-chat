@@ -259,6 +259,84 @@ select:focus-visible,
   50% { opacity: 0; }
 }
 
+/* ── ModelConfigPill：离散推理强度滑块 ───────────────────
+ * 原生 range 保证键盘可操作；填充比例通过 --range-fill 注入，
+ * 左侧深色、右侧浅灰。滑块是 14px 的白色圆点。
+ */
+
+.thinking-range {
+  --range-fill: 0%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.thinking-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.thinking-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--ink) 0%,
+    var(--ink) var(--range-fill),
+    var(--line-strong) var(--range-fill),
+    var(--line-strong) 100%
+  );
+}
+
+.thinking-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line-strong), 0 1px 3px oklch(0 0 0 / 0.18);
+  transition:
+    transform 120ms var(--ease-out-strong),
+    box-shadow 120ms ease;
+}
+
+.thinking-range:not(:disabled):hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+.thinking-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--accent), 0 1px 3px oklch(0 0 0 / 0.18);
+}
+
+.thinking-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.thinking-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ink);
+}
+
+.thinking-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.18);
+}
+
+.thinking-range:focus-visible {
+  outline: none;
+}
+
 /* ── StreamingText ────────────────────────────────────── */
 
 .stream-caret {

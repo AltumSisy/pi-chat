@@ -51,3 +51,10 @@ curl.exe -N -X  GET "http://localhost:4328/api/conversation/6fd181c5-8982-4702-a
 会话删除
 会话编辑
 会话终止
+
+
+会话配置
+model list
+thinking level list
+
+会话配置切换

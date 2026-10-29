@@ -8,6 +8,8 @@ import { createRuntime } from "./runtime.ts";
 import { EventChannel } from "./channel.ts";
 import type { TextContent, ImageContent } from "@earendil-works/pi-ai";
 import type {
+  ConversationConfig,
+  ConversationConfigUpdate,
   ConversationSnapshot,
   ConversationSummary,
   RuntimeStatus,
@@ -15,6 +17,7 @@ import type {
 import { ConversationViewBuild, isImagePart, resultText } from "./helpr.ts";
 import { existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
+
 
 /** 新建会话时的占位标题，一旦有首条用户消息就会被替换 */
 const DEFAULT_CONVERSATION_TITLE = "New Conversation";
@@ -232,7 +235,7 @@ export class ConversationService {
     managedSession.runtime.session.abort();
     this.setStatus(managedSession, "ready");
   }
-  
+
   /** 会话还是默认标题时，用首条用户消息生成标题 */
   private async ensureTitle(conversationId: string, userInput: string) {
     const conversationRecord =
@@ -265,6 +268,88 @@ export class ConversationService {
     }
     this.channels.set(conversationId, channel);
     return channel;
+  }
+
+  /**
+   * 更新配置
+   * @param conversationId
+   * @param update
+   * @returns
+   */
+  async updateConfig(
+    conversationId: string,
+    update: ConversationConfigUpdate,
+  ): Promise<ConversationConfig> {
+    const managerSession = await this.ensureManagedSession(conversationId);
+    if (this.isBusy(managerSession))
+      throw new Error(
+        `cannot update config for this conversation ${conversationId} because it is busy`,
+      );
+    const session = managerSession.runtime.session;
+
+    // 先切模型：setModel 会按新模型的能力收敛 thinkingLevel
+    if (update.model) {
+      const target = update.model;
+      const model = this.availableModels(managerSession).find(
+        (item) =>
+          item.provider === target.provider && item.id === target.id,
+      );
+      if (!model) {
+        throw new Error(
+          `model ${target.provider}/ ${target.id} is not available`,
+        );
+      }
+      await session.setModel(model);
+    }
+
+    // 再应用推理强度：必须相对（可能刚刚切换的）当前模型校验
+    if (update.thinkingLevel) {
+      if (!session.getAvailableThinkingLevels().includes(update.thinkingLevel))
+        throw new Error(
+          `Thinking level ${update.thinkingLevel} is not available`,
+        );
+      session.setThinkingLevel(update.thinkingLevel);
+    }
+    return this.getConfig(conversationId);
+  }
+
+  /**
+   * 获取配置
+   * @param conversationId 
+   * @returns 
+   */
+  public async getConfig(conversationId: string): Promise<ConversationConfig> {
+    const managerSession = await this.ensureManagedSession(conversationId);
+    return this.config(managerSession);
+  }
+
+  private config(managerSession: ManagerSession): ConversationConfig {
+    const sessionManager = managerSession.runtime.session;
+    return {
+      model: {
+        provider: sessionManager.agent.state.model.provider,
+        id: sessionManager.agent.state.model.id,
+      },
+      models: this.availableModels(managerSession).map((item) => {
+        return {
+          provider: item.provider,
+          id: item.id,
+          name: item.name,
+          contextWindow: item.contextWindow,
+          reasoning: item.reasoning,
+          imageInput: item.input.includes("image"),
+        };
+      }),
+      thinkingLevel: sessionManager.agent.state.thinkingLevel,
+      availableThinkingLevels: sessionManager.getAvailableThinkingLevels(),
+    };
+  }
+
+  private availableModels(managerSession: ManagerSession) {
+    const scopedModels = managerSession.runtime.session.scopedModels;
+    return scopedModels.length > 0
+      ? scopedModels.map((item) => item.model)
+      : this.modelRuntime.getAvailableSnapshot();
   }
 
   private bind(managerSession: ManagerSession) {
