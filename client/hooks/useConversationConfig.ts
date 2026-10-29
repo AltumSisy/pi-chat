@@ -228,6 +228,37 @@ export function useConversationConfig(conversationId?: string) {
     [schedule],
   );
 
+  /**
+   * 切换技能选择：立即提交。
+   * 服务端会按新选择重建整个 runtime（重新加载 skillsDir），代价比改思考强度高，
+   * 所以不走 debounce，避免连续勾选时排队重建好几次。
+   */
+  const setSkills = useCallback(
+    (skills: string[]) => {
+      const targetId = conversationIdRef.current;
+      const current = configRef.current;
+      if (!targetId || !current) return;
+
+      versionRef.current += 1;
+      const next: ConversationConfig = { ...current, activeSkillNames: skills };
+      configRef.current = next;
+      setState((value) =>
+        value.conversationId === targetId
+          ? { ...value, config: next, error: "" }
+          : value,
+      );
+
+      // 把 debounce 窗口里的改动（比如刚拖的思考强度）合并进来，别让它丢
+      const pending = pendingRef.current;
+      const update: ConversationConfigUpdate = {
+        ...(pending?.conversationId === targetId ? pending.update : {}),
+        skills,
+      };
+      schedule(targetId, update, true);
+    },
+    [schedule],
+  );
+
   /** 发送消息前调用：把还在 debounce / 排队中的修改全部落盘 */
   const flush = useCallback(async () => {
     if (timerRef.current !== null) {
@@ -247,6 +278,7 @@ export function useConversationConfig(conversationId?: string) {
     error: matchesCurrent ? state.error : "",
     setModel,
     setThinkingLevel,
+    setSkills,
     flush,
   };
 }

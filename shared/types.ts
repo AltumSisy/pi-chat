@@ -83,6 +83,7 @@ export interface ConversationSummary {
 
 export interface ConversationSnapshot {
   conversationSummary: ConversationSummary;
+  activeSkillNames: string[];
   messageList: MessageListItem[];
   model: { provider: string; id: string };
   thinkingLevel: ThinkingLevel;
@@ -110,6 +111,19 @@ export interface ModelOption {
   imageInput: boolean;
 }
 
+export interface SkillOption {
+  name: string;
+  description: string;
+  /** true 表示该技能不会写进 system prompt，只能由用户显式指定 */
+  disableModelInvocation: boolean;
+}
+
+/** GET /api/skills 的返回：可用技能 + 加载过程中的告警 */
+export interface SkillListResponse {
+  skills: SkillOption[];
+  warnings: string[];
+}
+
 export interface RepositoryInfo {
   branch: string;
   commit: string;
@@ -125,12 +139,18 @@ export interface ConversationConfig {
   models: ModelOption[];
   thinkingLevel: ThinkingLevel;
   availableThinkingLevels: ThinkingLevel[];
+  /** 当前会话已选中的技能名 */
+  activeSkillNames: string[];
+  /** 可供选择的技能 */
+  skills: SkillOption[];
 }
 
-export interface ConversationConfigUpdate{
-  model?:{
-    provider:string,
-    id:string
+export interface ConversationConfigUpdate {
+  model?: {
+    provider: string;
+    id: string;
   };
-  thinkingLevel?:ThinkingLevel
+  thinkingLevel?: ThinkingLevel;
+  /** 覆盖当前会话的技能选择；传 [] 表示清空 */
+  skills?: string[];
 }

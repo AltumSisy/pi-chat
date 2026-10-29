@@ -8,6 +8,8 @@ export interface GlobalConfig {
   recordsDir: string;
   sessionsDir: string;
   workspacesDir: string;
+  mcpConfigPath:string;
+  skillsDir:string;
 }
 
 export function getGlobalConfig(
@@ -20,6 +22,8 @@ export function getGlobalConfig(
     recordsDir: join(resolvedRootDir, "records"),
     sessionsDir: join(resolvedRootDir, "sessions"),
     workspacesDir: join(resolvedRootDir, "workspaces"),
+    mcpConfigPath: join(resolvedRootDir, ".mcp.json"),
+    skillsDir: join(resolvedRootDir, "skill"),
   };
 }
 

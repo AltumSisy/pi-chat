@@ -8,18 +8,20 @@ import {
   AgentSessionRuntime,
   type CreateAgentSessionRuntimeFactory,
   defineTool,
+  type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import type { GlobalConfig } from "@server/config";
 import type { ConversationRecord } from "./types.ts";
 import { Type } from "@earendil-works/pi-ai";
 
-const SYSTEM_PROMPT = `hi, this is a special agent`;
+const SYSTEM_PROMPT = `hi, this is miki's person agent`;
 
 export interface RuntimeOptions {
   conversationRecord: ConversationRecord;
   globalConfig: GlobalConfig;
   modelRuntime: ModelRuntime;
   sessionManager: SessionManager;
+  selectedSkills?: string[];
 }
 
 const utcTimeTool = defineTool({
@@ -38,9 +40,14 @@ const utcTimeTool = defineTool({
 export async function createRuntime(
   option: RuntimeOptions,
 ): Promise<AgentSessionRuntime> {
-  const { conversationRecord, globalConfig, modelRuntime, sessionManager } =
-    option;
-
+  const {
+    conversationRecord,
+    globalConfig,
+    modelRuntime,
+    sessionManager,
+    selectedSkills = [],
+  } = option;
+  const selectedSkillsSet = new Set(selectedSkills);
   let runtimeSessionManager: SessionManager = sessionManager;
   if (!runtimeSessionManager) {
     runtimeSessionManager = SessionManager.create(
@@ -62,6 +69,27 @@ export async function createRuntime(
       resourceLoaderOptions: {
         noExtensions: true,
         systemPromptOverride: () => SYSTEM_PROMPT,
+        extensionFactories: [
+          async (pi) => {
+            const packageName = "pi-mcp-adapter";
+            const { createMcpAdapter } = (await import(packageName)) as {
+              createMcpAdapter(options: {
+                configPath: string;
+              }): ExtensionFactory;
+            };
+            await createMcpAdapter({ configPath: globalConfig.mcpConfigPath })(
+              pi,
+            );
+          },
+        ],
+        noSkills:true,
+        additionalSkillPaths:[globalConfig.skillsDir],
+        skillsOverride:(base)=>{
+          return{
+            ...base,
+            skills: base.skills.filter((skill)=> selectedSkillsSet.has(skill.name))
+          }
+        }
       },
     });
     const agentSession = await createAgentSessionFromServices({
@@ -69,6 +97,8 @@ export async function createRuntime(
       sessionManager: runtimeSessionManager,
       customTools: [utcTimeTool],
     });
+
+    await agentSession.session.bindExtensions({});
     return {
       ...agentSession,
       services,

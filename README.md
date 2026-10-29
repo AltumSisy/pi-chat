@@ -5,6 +5,8 @@
 **后端**：Hono + SSE（Server-Sent Events） + pi-coding-agent
 **前端**：Vite + React 19 + Tailwind CSS v4 + Beautiful UI 组件库
 
+**功能**：流式对话、思考 / 工具调用展示、会话管理、会话级模型与推理强度切换。
+
 ---
 
 ## 快速开始
@@ -59,14 +61,16 @@ pi-chat/
 │   │   └── primitives/
 │   │       ├── SidebarNav.tsx     # 侧栏（可折叠 / 搜索 / 改名 / 删除）
 │   │       ├── ConfirmPopover.tsx # 就地确认弹层（替代 window.confirm）
+│   │       ├── ModelConfigPill.tsx # 模型 / 推理强度胶囊 + 向上浮层
 │   │       ├── GlideMenu.tsx      # 行间“滑行”高亮层
-│   │       ├── PromptBar.tsx      # 输入框（自适应高度 / Enter 发送）
+│   │       ├── PromptBar.tsx      # 输入框（自适应高度 / Enter 发送 / 右侧操作插槽）
 │   │       ├── ThinkingState.tsx  # 思考面板（可折叠）
 │   │       ├── ToolChips.tsx      # 工具调用卡片
 │   │       ├── LoadingState.tsx   # 加载动画（像素网格 + 计时器）
 │   │       └── StreamingText.tsx  # 流式文本 + 光标（目前未被引用，保留）
 │   ├── hooks/
 │   │   ├── useConversationStream2.ts  # ★ 当前在用：快照 + SSE + 乐观更新
+│   │   ├── useConversationConfig.ts   # ★ 会话级模型 / 推理强度配置
 │   │   ├── useConversationList.ts     # 会话列表（轮询 / 改名 / 删除 / 终止）
 │   │   └── useConversationStream.ts   # 旧版（fetch 流式解析），保留参考
 │   ├── lib/
@@ -108,7 +112,7 @@ pi-chat/
 | 层 | 位置 | 职责 |
 |----|------|------|
 | 界面层 | `client/components/AgentHarness.tsx` | 布局；把 hooks 的数据接到组件 |
-| 状态层 | `client/hooks/*`、`client/state.ts` | 快照 + SSE → 消息列表；会话列表轮询 |
+| 状态层 | `client/hooks/*`、`client/state.ts` | 快照 + SSE → 消息列表；会话列表轮询；配置读写 |
 | HTTP 层 | `server/routes/conversation.ts` | 取参数 → 调 service → 组响应 |
 | 编排层 | `server/conversation/service.ts` | 编排 repository / runtime / channel |
 | 底座 | `runtime.ts` / `repository.ts` / `channel.ts` | AI 胶水 / 持久化 / 事件 pub-sub |
@@ -133,6 +137,8 @@ pi-chat/
 | `POST` | `/api/conversation/:id/abort` | 终止生成 → `{ aborted: true }` |
 | `POST` | `/api/conversation/:id/message` | 发送消息（`FormData { text }`）→ `202` |
 | `GET` | `/api/conversation/:id/stream?after=N` | SSE 事件流（`after` = 事件游标，`after` 落后则补发） |
+| `GET` | `/api/conversation/:id/config` | 获取模型 / 推理强度配置 → `ConversationConfig` |
+| `PATCH` | `/api/conversation/:id/config` | 更新配置（`{ model?, thinkingLevel? }`）→ `ConversationConfig` |
 | `GET` | `/api/system/health` | 健康检查 → `{ status: "ok" }` |
 
 ### SSE 事件类型
@@ -166,6 +172,43 @@ pi-chat/
 而发送又挂在 `onopen` 上，于是首条消息白等一个 keepalive 周期。
 
 排查过程见 `bug-record/首次发送延迟-SSE被代理缓冲/record.md`。
+
+---
+
+## 模型与推理强度配置
+
+每个会话可以独立选择模型和推理强度（thinking level），入口在输入框发送按钮左侧的胶囊按钮。
+
+### 交互
+
+- 胶囊显示 `模型 id + 当前档位`，例如 `deepseek-v4.1-flash High`
+- 点击向上弹出浮层：
+  - 模型候选列表（当前项高亮 + Check）
+  - 推理强度滑块：档位来自服务端 `availableThinkingLevels`，左侧深色填充、右侧浅灰轨迹
+- 切换模型后，服务端会按新模型能力收敛 thinking level，响应同步回 UI
+- 流式输出期间禁用配置修改（服务端 `updateConfig` 会拒绝 busy 会话）
+
+### 状态同步与持久化
+
+配置由 `client/hooks/useConversationConfig.ts` 管理：
+
+1. 进入会话时 `GET /api/conversation/:id/config`
+2. 修改先乐观更新 UI，再 PATCH：
+   - 模型切换：立即提交 `{ model }`
+   - 滑块：连续拖动合并 180ms 后提交 `{ thinkingLevel }`
+   - PATCH 串行执行，避免连续修改互相覆盖
+3. PATCH 返回完整 `ConversationConfig`；期间若又有新改动，丢弃旧响应
+4. 保存失败时回滚到服务端最后一次确认的配置，并在输入区 / 浮层显示错误
+5. 发送消息前 `await flushConfig()`，确保本轮 prompt 使用最新的模型 / thinkingLevel
+
+配置是会话级的：新会话在第一条消息创建 `conversationId` 后才会出现胶囊。
+
+### 模型来源
+
+- 模型定义：`~/.pi/agent/models.json`
+- 可用性：只有已配置凭证的 provider 的模型才会出现在列表（凭证来自 `auth.json` 或 `models.json` 里的 `apiKey`）
+- `GET /config` 会执行 `modelRuntime.refresh({ allowNetwork: false })` 重新读取本地模型目录，
+  因此新增模型不需要重启服务；新增 provider 仍需先配置认证
 
 ---
 
@@ -257,7 +300,12 @@ pi-chat/
 用户输入文字
   │
   ▼
-PromptBar.onSend(text) → useConversationStream2.submit(text)
+PromptBar.onSend(text) → AgentHarness.handleSend(text)
+  │
+  ├── await flushConfig()：先提交待落盘的模型 / 推理强度改动
+  │
+  ▼
+useConversationStream2.submit(text)
   │
   ├── 还没有 conversationId？先 POST /api/conversation 创建，再导航过去
   │     （新建会话不立刻建记录，避免列表堆一堆空会话）

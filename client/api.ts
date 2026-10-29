@@ -3,6 +3,7 @@ import type {
   ConversationConfigUpdate,
   ConversationSnapshot,
   ConversationSummary,
+  SkillListResponse,
   StreamEvent,
 } from "../shared/types";
 
@@ -29,11 +30,18 @@ export function createConversation(): Promise<ConversationSnapshot> {
  * 发送消息
  * @param id
  * @param text
+ * @param skills 显式指定本轮要用的技能；不传则沿用会话当前的选择
  * @returns
  */
-export function sendMessage(id: string, text: string): Promise<unknown> {
+export function sendMessage(
+  id: string,
+  text: string,
+  skills?: string[],
+): Promise<unknown> {
   const form = new FormData();
   form.set("text", text);
+  // 只有明确传了才带上：省略该字段 = 服务端保持当前选择
+  if (skills) form.set("skills", JSON.stringify(skills));
   return readResponse(
     fetch(`/api/conversation/${encodeURIComponent(id)}/message`, {
       method: "POST",
@@ -118,6 +126,15 @@ export function renameConversation(
       body: JSON.stringify({ title }),
     }),
   );
+}
+
+/**
+ * 可用技能列表（服务端的 skillsDir）
+ * warnings 里是 SKILL.md 校验失败的技能，不会出现在 skills 里
+ * @returns
+ */
+export function listSkills(): Promise<SkillListResponse> {
+  return readResponse(fetch("/api/skills"));
 }
 
 /**

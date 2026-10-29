@@ -30,6 +30,7 @@
     "hono": "^4.13.8",
     "hono-pino": "^0.10.3",
     "lucide-react": "^1.52.0",
+    "pi-mcp-adapter": "^7.0.0",
     "pino": "^10.3.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

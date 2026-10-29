@@ -81,7 +81,21 @@ export function createConversationRoutes(
     const formData = await ctx.req.formData();
     const { conversationId } = ctx.req.param();
     const userInput = formData.get("text") as string;
-    await conversationService.send(conversationId, userInput);
+    const skillsRaw = formData.get("skills") as string | null;
+    // 没带 skills 字段 = 保持当前选择；带了就必须是合法的 name 数组
+    let skills: string[] | undefined;
+    if (skillsRaw !== null && skillsRaw !== "") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(skillsRaw);
+      } catch {
+        throw new Error("skills must be valid JSON");
+      }
+      if (!Array.isArray(parsed) || parsed.some((s) => typeof s !== "string"))
+        throw new Error("skills must be a JSON array of skill names");
+      skills = parsed;
+    }
+    await conversationService.send(conversationId, userInput, skills);
     return ctx.json({ accepts: true }, 202);
   });
 
@@ -106,12 +120,22 @@ export function createConversationRoutes(
   });
 
   /**
-   * 变更配置
+   * 变更配置（模型 / 推理强度 / 技能选择）
    */
   conversationApp.patch("/:conversationId/config", async (ctx) => {
     const { conversationId } = ctx.req.param();
     const body = await jsonBody<ConversationConfigUpdate>(ctx.req.raw);
-    const updatedConfig = await conversationService.updateConfig(conversationId, body)
+    if (body.skills !== undefined) {
+      if (
+        !Array.isArray(body.skills) ||
+        body.skills.some((skill) => typeof skill !== "string")
+      )
+        throw new Error("skills must be an array of skill names");
+    }
+    const updatedConfig = await conversationService.updateConfig(
+      conversationId,
+      body,
+    );
     return ctx.json(updatedConfig);
   });
 

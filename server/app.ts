@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { createConversationRoutes } from './routes/conversation.ts';
+import { createSkillRoutes } from './routes/skill.ts';
 import{createSystemRoutes} from './routes/system.ts';
 import pino from 'pino';
 import { pinoLogger, type Env as HonoPinoEnv } from 'hono-pino';
@@ -43,6 +44,7 @@ export function createApp(conversationService:ConversationService): Hono<HonoPin
 
     app.get('/', (c) => c.text('Hello, Hono!'));
     app.route('/api/conversation', createConversationRoutes(conversationService));
+    app.route('/api/skills', createSkillRoutes(conversationService));
     app.route('/api/system', createSystemRoutes());
 
     return app;

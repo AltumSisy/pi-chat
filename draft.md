@@ -1,6 +1,16 @@
 
 curl -X POST http://localhost:4328/api/conversation
 
+
+root_dir
+mcp.json
+-app-settings.json
+-exports
+-records
+  -xx.json
+-sessions
+  -xx.json
+-workspaces
 ```json
 {
   "conversationSummary": {
@@ -58,3 +68,5 @@ model list
 thinking level list
 
 会话配置切换
+
+mcp接入

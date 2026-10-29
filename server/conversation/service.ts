@@ -1,4 +1,8 @@
-import { SessionManager, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import {
+  SessionManager,
+  ModelRuntime,
+  loadSkillsFromDir,
+} from "@earendil-works/pi-coding-agent";
 import type { ConversationRecord, ManagerSession } from "./types.ts";
 import type { GlobalConfig } from "@server/config";
 import { join } from "node:path";
@@ -13,7 +17,10 @@ import type {
   ConversationSnapshot,
   ConversationSummary,
   RuntimeStatus,
+  SkillListResponse,
+  SkillOption,
 } from "@shared/types.ts";
+import { hasSameStringItems } from "@server/utils";
 import { ConversationViewBuild, isImagePart, resultText } from "./helpr.ts";
 import { existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
@@ -81,6 +88,7 @@ export class ConversationService {
       sessionFile: sessionManager.getSessionFile()!,
       createdAt: currentTimestamp,
       updatedAt: currentTimestamp,
+      selectedSkills: [],
     };
 
     await this.conversationReposity.save(conversationRecord);
@@ -88,25 +96,57 @@ export class ConversationService {
     return this.createManagerSession(conversationRecord, sessionManager);
   }
 
-  async send(conversationId: string, userInput: string) {
+  async send(conversationId: string, userInput: string, skills?: string[]) {
     const cleanedUserInput = userInput.trim();
     if (!cleanedUserInput || cleanedUserInput.length === 0)
       throw new Error("user input is empty");
-    const managedSession = await this.ensureManagedSession(conversationId);
+
+    const ensureSkillsName = this.ensureSkill(skills);
+    const managedSession = await this.ensureManagedSession(
+      conversationId,
+      ensureSkillsName,
+    );
     // 首条消息顺便给会话起名（只改一次，之后就是用户自己的标题）
     await this.ensureTitle(conversationId, cleanedUserInput);
     managedSession.runtime.session.prompt(cleanedUserInput);
+  }
+
+  /**
+   * 校验并使用显式传入的技能名。
+   * 返回 undefined 表示「本次请求没有指定技能」，调用方应沿用当前/持久化的选择；
+   * 返回数组（可能是空数组）表示调用方显式指定了选择。
+   */
+  private ensureSkill(skills?: string[]): string[] | undefined {
+    if (!skills) return undefined;
+    return this.resolveSkills(skills);
+  }
+
+  /** 校验技能名：未知名字直接报错，避免「选了但静默不生效」 */
+  private resolveSkills(skills: string[]): string[] {
+    const availableSkillsSet = new Set(
+      this.getAvailableSkills().skills.map((skill) => skill.name),
+    );
+    const unknownSkills = skills.filter(
+      (skill) => !availableSkillsSet.has(skill),
+    );
+    if (unknownSkills.length > 0)
+      throw new Error(
+        `unknown skill(s): ${unknownSkills.join(", ")}; available skills: ${[...availableSkillsSet].join(", ") || "(none)"}`,
+      );
+    return [...new Set(skills)];
   }
   //glue with pi
   private async createManagerSession(
     conversationRecord: ConversationRecord,
     sessionManager: SessionManager,
+    selectedSkills: string[] = [],
   ): Promise<ManagerSession> {
     const runtime = await createRuntime({
       conversationRecord,
       globalConfig: this.globalConfig,
       modelRuntime: this.modelRuntime,
       sessionManager,
+      selectedSkills,
     });
 
     const managerSession: ManagerSession = {
@@ -115,6 +155,7 @@ export class ConversationService {
       channel: this.getEventChannel(conversationRecord.id),
       status: runtime.session.isStreaming ? "running" : "ready",
       diagnostics: runtime.diagnostics.map((item) => item.message),
+      activeSkillNames: [...selectedSkills],
     };
     this.sessionManager.set(managerSession.id, managerSession);
     this.bind(managerSession);
@@ -138,6 +179,7 @@ export class ConversationService {
         restoredConversationRecord,
         managedSession.status,
       ),
+      activeSkillNames: [...managedSession.activeSkillNames],
       messageList: messageList,
       model: {
         provider: session.agent.state.model.provider,
@@ -280,7 +322,12 @@ export class ConversationService {
     conversationId: string,
     update: ConversationConfigUpdate,
   ): Promise<ConversationConfig> {
-    const managerSession = await this.ensureManagedSession(conversationId);
+    // 技能选择变化会重建 runtime，交给 ensureManagedSession 处理（它自带 busy 检查）
+    const selectedSkills = this.ensureSkill(update.skills);
+    const managerSession = await this.ensureManagedSession(
+      conversationId,
+      selectedSkills,
+    );
     if (this.isBusy(managerSession))
       throw new Error(
         `cannot update config for this conversation ${conversationId} because it is busy`,
@@ -291,8 +338,7 @@ export class ConversationService {
     if (update.model) {
       const target = update.model;
       const model = this.availableModels(managerSession).find(
-        (item) =>
-          item.provider === target.provider && item.id === target.id,
+        (item) => item.provider === target.provider && item.id === target.id,
       );
       if (!model) {
         throw new Error(
@@ -315,11 +361,14 @@ export class ConversationService {
 
   /**
    * 获取配置
-   * @param conversationId 
-   * @returns 
+   * @param conversationId
+   * @returns
    */
   public async getConfig(conversationId: string): Promise<ConversationConfig> {
     const managerSession = await this.ensureManagedSession(conversationId);
+    // models.json 只在进程启动 / 新建 session 时加载；这里刷新一次，
+    // 新配置的模型无需重启服务即可出现在列表里。
+    await this.modelRuntime.refresh({ allowNetwork: false });
     return this.config(managerSession);
   }
 
@@ -342,6 +391,8 @@ export class ConversationService {
       }),
       thinkingLevel: sessionManager.agent.state.thinkingLevel,
       availableThinkingLevels: sessionManager.getAvailableThinkingLevels(),
+      activeSkillNames: [...managerSession.activeSkillNames],
+      skills: this.getAvailableSkills().skills,
     };
   }
 
@@ -350,6 +401,27 @@ export class ConversationService {
     return scopedModels.length > 0
       ? scopedModels.map((item) => item.model)
       : this.modelRuntime.getAvailableSnapshot();
+  }
+
+  /** 读取 skillsDir 下的可用技能，并把加载告警一并带出去 */
+  public getAvailableSkills(): SkillListResponse {
+    const loadSkillsResult = loadSkillsFromDir({
+      dir: this.globalConfig.skillsDir,
+      source: "project",
+    });
+    const skills: SkillOption[] = loadSkillsResult.skills.map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      disableModelInvocation: skill.disableModelInvocation,
+    }));
+    return {
+      skills,
+      warnings: loadSkillsResult.diagnostics.map((diagnostic) =>
+        diagnostic.path
+          ? `${diagnostic.type}: ${diagnostic.message} (${diagnostic.path})`
+          : `${diagnostic.type}: ${diagnostic.message}`,
+      ),
+    };
   }
 
   private bind(managerSession: ManagerSession) {
@@ -499,9 +571,48 @@ export class ConversationService {
     managedSession.channel.publish("runtime.status", { status });
   }
 
-  private async ensureManagedSession(conversationId: string) {
+  private async ensureManagedSession(
+    conversationId: string,
+    selectedSkills?: string[],
+  ) {
     let restoredSessionManaged = this.sessionManager.get(conversationId);
-    if (restoredSessionManaged) return restoredSessionManaged;
+    //做好sessionManager skill的连贯性
+    if (restoredSessionManaged) {
+      if (
+        !selectedSkills ||
+        hasSameStringItems(
+          restoredSessionManaged.activeSkillNames,
+          selectedSkills,
+        )
+      ) {
+        return restoredSessionManaged;
+      }
+
+      if (this.isBusy(restoredSessionManaged))
+        throw new Error(
+          `session目前是busy状态，cannot be update with new selected skills`,
+        );
+      //re-create sessionManaged
+      const conversationRecord =
+        await this.conversationReposity.get(conversationId);
+      if (!conversationRecord)
+        throw new Error(
+          `conversationRecord with id ${conversationId} not found`,
+        );
+      // 先落盘再重建，避免重建成功但记录没写进去
+      await this.conversationReposity.update(conversationId, {
+        selectedSkills,
+      });
+      // sessionManaged & event channel 不能释放
+      const sessionManager =
+        restoredSessionManaged.runtime.session.sessionManager;
+      this.release(conversationId, { dropChannel: false });
+      return this.createManagerSession(
+        conversationRecord,
+        sessionManager,
+        selectedSkills,
+      );
+    }
 
     const conversationRecord =
       await this.conversationReposity.get(conversationId);
@@ -520,9 +631,28 @@ export class ConversationService {
         this.globalConfig.sessionsDir,
         { id: conversationId },
       );
+      // SessionManager 的 jsonl 是懒创建的：记录里的路径可能是「新建后还没发过消息」的幽灵路径。
+      // 必须把新建出的真实路径写回记录，否则每次冷启动都会再建一个新文件，
+      // 真实历史留在没人引用的旧文件里（表现为重启后消息全丢）。
+      conversationRecord.sessionId = sessionManaged.getSessionId();
+      conversationRecord.sessionFile = sessionManaged.getSessionFile()!;
+      await this.conversationReposity.update(conversationId, {
+        sessionId: conversationRecord.sessionId,
+        sessionFile: conversationRecord.sessionFile,
+      });
     }
 
-    return this.createManagerSession(conversationRecord, sessionManaged);
+    // 冷启动时必须把持久化的技能选择带进 runtime，否则重启后技能会丢
+    const recordSkills = conversationRecord.selectedSkills ?? [];
+    const activeSkills = selectedSkills ?? recordSkills;
+    if (selectedSkills && !hasSameStringItems(recordSkills, selectedSkills)) {
+      await this.conversationReposity.update(conversationId, { selectedSkills });
+    }
+    return this.createManagerSession(
+      conversationRecord,
+      sessionManaged,
+      activeSkills,
+    );
   }
 
   private isBusy(managerSession: ManagerSession): boolean {
@@ -534,13 +664,21 @@ export class ConversationService {
     );
   }
 
-  private async release(conversationId: string) {
+  /**
+   * 释放内存里的 runtime / session，不动磁盘上的 conversationRecord。
+   * 记录只由 delete() 负责删除，否则切换技能时会把会话记录一起删掉。
+   */
+  private release(
+    conversationId: string,
+    options: { dropChannel?: boolean } = {},
+  ) {
     const managerSession = this.sessionManager.get(conversationId);
     if (!managerSession) return;
     managerSession.unsubscribe?.();
     managerSession.runtime.session.dispose();
-    await this.conversationReposity.delete(conversationId);
-    this.channels.delete(conversationId);
+    if (options.dropChannel ?? true) {
+      this.channels.delete(conversationId);
+    }
     this.sessionManager.delete(conversationId);
   }
 }

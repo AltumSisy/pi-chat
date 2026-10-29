@@ -10,6 +10,7 @@ export interface ConversationRecord{
     sessionFile:string;
     createdAt:string;
     updatedAt:string;
+    selectedSkills:string[]
 }
 
 export interface ManagerSession{
@@ -19,6 +20,7 @@ export interface ManagerSession{
     channel:EventChannel;
     streamMessageId?:string;
     streamThinkingId?:string;
+    activeSkillNames:string[];
     status:RuntimeStatus;
     error?:string;
     diagnostics:string[];

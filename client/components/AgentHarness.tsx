@@ -8,6 +8,7 @@ import { useConversationConfig } from "../hooks/useConversationConfig";
 import { MessageItem } from "./MessageItem";
 import LoadingState from "./primitives/LoadingState";
 import ModelConfigPill from "./primitives/ModelConfigPill";
+import SkillPicker from "./primitives/SkillPicker";
 import PromptBar from "./primitives/PromptBar";
 import type { ConfirmCopy } from "./primitives/ConfirmPopover";
 import SidebarNav, { type SidebarRecent } from "./primitives/SidebarNav";
@@ -42,6 +43,7 @@ export default function AgentHarness(): ReactNode {
     error: configError,
     setModel,
     setThinkingLevel,
+    setSkills,
     flush: flushConfig,
   } = useConversationConfig(conversationId);
   const {
@@ -257,14 +259,24 @@ export default function AgentHarness(): ReactNode {
               placeholder="输入消息，按 Enter 发送…"
               actions={
                 config ? (
-                  <ModelConfigPill
-                    config={config}
-                    disabled={loading}
-                    saving={configSaving}
-                    error={configError}
-                    onModelChange={setModel}
-                    onThinkingLevelChange={setThinkingLevel}
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <SkillPicker
+                      active={config.activeSkillNames}
+                      available={config.skills}
+                      disabled={loading}
+                      saving={configSaving}
+                      error={configError}
+                      onChange={setSkills}
+                    />
+                    <ModelConfigPill
+                      config={config}
+                      disabled={loading}
+                      saving={configSaving}
+                      error={configError}
+                      onModelChange={setModel}
+                      onThinkingLevelChange={setThinkingLevel}
+                    />
+                  </div>
                 ) : conversationId && configLoading ? (
                   <span
                     aria-hidden
