@@ -23,6 +23,7 @@
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@hono/node-server": "^2.1.1",
+    "@langfuse/pi-observability-plugin": "^0.1.2",
     "@tailwindcss/vite": "^4.3.3",
     "clsx": "^2.1.1",
     "donet": "^1.0.1",

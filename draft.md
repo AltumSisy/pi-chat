@@ -70,3 +70,5 @@ thinking level list
 会话配置切换
 
 mcp接入
+
+航班：
